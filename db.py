@@ -4,6 +4,7 @@ from sqlalchemy.orm import relationship, backref
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import sys
+import datetime
 
 Base = declarative_base()
 
@@ -13,14 +14,16 @@ class Repository(Base):
     name = Column(String(256))
     path = Column(String(256))
     owner = Column(String(100))
+    revisions = relationship('Revision', backref='repository')
 
-class Commit(Base):
-    __tablename__ = 'commit'
+class Revision(Base):
+    __tablename__ = 'revision'
     sno = Column(Integer, primary_key=True)
     hash = Column(String(32))
     commit_time = Column(DateTime)
     repo_sno = Column(Integer, ForeignKey('repository.sno'))
-    repo = relationship('Repository', backref=backref('commit', order_by=sno))
+    repo = relationship('Repository', back_populates='revisions')
+    slocs = relationship('Sloc')
 
 class Sloc(Base):
     __tablename__ = 'sloc'
@@ -29,6 +32,9 @@ class Sloc(Base):
     filename = Column(String(256))
     source_line = Column(Integer)
     empty_line = Column(Integer)
+
+    revision_sno = Column(Integer, ForeignKey('revision.sno'))
+    revision = relationship('Revision', back_populates='slocs')
 
 def build_db():
     engine = create_engine('sqlite:///sloc.db', echo=True)
@@ -39,13 +45,30 @@ def test_data():
     Session = sessionmaker(bind=engine)
     s = Session()
     repo = Repository(name='test_name', path='test_path', owner='test_owner')
-    c1 = Commit('test_0000000001', DateTime(2019, 1, 1))
-    repo.commit = [c1]
+    r1 = Revision(hash='test_0000000001', commit_time=datetime.datetime.now())
+    sloc1 = Sloc(language='Java', filename='a.java', source_line=20, empty_line=2)
+    r1.slocs = [sloc1]
+    repo.revisions = [r1]
     s.add(repo)
     s.commit()
+
+def query():
+    engine = create_engine('sqlite:///sloc.db')
+    Session = sessionmaker(bind=engine)
+    s = Session()
+    repos = s.query(Repository).all()
+    print('count = %d name=%s' % (len(repos), repos[0].name) )
+
+    for repo in repos:
+        for r in repo.revisions:
+            for sloc in r.slocs:
+                print(sloc.filename)
+
 
 if __name__ == '__main__':
     if len(sys.argv) >= 2 and sys.argv[1] == 'build':
         build_db()
     elif sys.argv[1] == 'data':
         test_data()
+    elif sys.argv[1] == 'query':
+        query()
