@@ -45,11 +45,18 @@ def test_data():
     Session = sessionmaker(bind=engine)
     s = Session()
     repo = Repository(name='test_name', path='test_path', owner='test_owner')
-    r1 = Revision(hash='test_0000000001', commit_time=datetime.datetime.now())
+    repo2 = Repository(name='repo2', path='repo_path', owner='vincentliao')
+
     sloc1 = Sloc(language='Java', filename='a.java', source_line=20, empty_line=2)
-    r1.slocs = [sloc1]
-    repo.revisions = [r1]
+    sloc2 = Sloc(language='Cpp', filename='c.cpp', source_line=30, empty_line=3)
+
+    r1 = Revision(hash='test_0000000002', commit_time=datetime.datetime.now())
+    repo2.revisions = [r1]
+
+    r1.slocs = [sloc1, sloc2]
+    repo.revisions = [Revision(hash='test_0000000001', commit_time=datetime.datetime.now())]
     s.add(repo)
+    s.add(repo2)
     s.commit()
 
 def query():
@@ -63,7 +70,6 @@ def query():
         for r in repo.revisions:
             for sloc in r.slocs:
                 print(sloc.filename)
-
 
 if __name__ == '__main__':
     if len(sys.argv) >= 2 and sys.argv[1] == 'build':
