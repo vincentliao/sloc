@@ -21,9 +21,9 @@ def sloc(project_path, skip_path, suffix):
 
 if __name__ == '__main__':
 
-    repo_path = '/workspace/kkboxmac'
+    repo_path = '/sloc/scan/gitbook_template'
     repo = GitRepo(repo_path + '/.git')
     for p in repo.get_all_commit_id():
         print('%s, %s' % (p.id, datetime.datetime.fromtimestamp(int(p.commit_time)).strftime('%Y-%m-%d %H:%M:%S')))
         repo.checkout_by(p.id)
-        sloc(repo_path, ['.git'], ['.m', '.h', '.c', '.cpp'])
+        sloc(repo_path, ['.git', 'images'], ['.sh', '.css'])
