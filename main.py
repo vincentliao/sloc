@@ -10,6 +10,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from db import Repository, Revision, Sloc
 
+import config
+
 def source_scanner(folder, skip_path, suffix):
     files = list()
     for (dirpath, dirnames, filenames) in os.walk(folder, topdown=True):
@@ -60,6 +62,11 @@ def get_latest_sum(sloc_db, repo_name):
         for sloc in r.slocs:
             print(sloc.filename)
 
-
 if __name__ == '__main__':
-    read_sloc_sum('sqlite:///sloc.db', repo_name='gitbook_template')
+
+    for info in config.info:
+        get_sloc(sloc_db='sqlite:///sloc.db', repo_name=info['repo_name'],
+            repo_path=info['repo_path'], repo_owner=info['repo_owner'],
+            skip_path=info['skip_path'], suffix=info['suffix'])
+
+    # read_sloc_sum('sqlite:///sloc.db', repo_name='gitbook_template')

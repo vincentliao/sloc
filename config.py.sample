@@ -1,0 +1,9 @@
+info = [
+    # Repository Information
+    { 'repo_name': '',
+      'repo_path': '',
+      'repo_owner': '',
+      'skip_path': ['.git', 'tests', 'test'],
+      'suffix': ['.py'], 
+      'url':'' }
+]
