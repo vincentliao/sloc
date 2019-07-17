@@ -14,6 +14,10 @@ import config
 import logging
 
 import pandas as pd
+from bokeh.io import show, output_file
+from bokeh.models import ColumnDataSource, FactorRange
+from bokeh.plotting import figure
+
 
 log = logging.getLogger("sloc_main")
 
@@ -75,7 +79,7 @@ class SlocWorker:
 
         return repos[0]
 
-    def date_journey(self, repo_name):
+    def figure_commits(self, repo_name):
         Session = sessionmaker(bind=self.engine)
         s = Session()
         repo = self.load_repository(s, repo_name)
@@ -86,15 +90,20 @@ class SlocWorker:
         }
 
         cm = pd.DataFrame.from_dict(data)
-        cmt = cm.set_index('commit_time').groupby(pd.Grouper(freq='D'))
-        for x in cmt:
-            log.info(x)
+        cmt = cm.set_index('commit_time').groupby(pd.Grouper(freq='M'))
 
-        # rev_group = [(r.commit_time.replace(hour=0, minute=0, second=0), r.hash, r.commit_time) for r in repo.revisions]
-        # journey_point = {'date': 123131231, 'sum': 1233, 'revision_count':3, 'file_count':34 }
-        journey = []
-        # log.info(rev_group)
-        return journey
+        figure_title = "Commit Counts(%s)" % repo_name
+        output_file("figure_commits_%s.html" % repo_name)
+
+        date_tags = [str(x[0].date()) for x in cmt]
+        commit_amount = [len(x[1]) for x in cmt]
+        p = figure(x_range=date_tags, plot_height=250, title=figure_title,
+                   toolbar_location=None, tools="")
+
+        p.vbar(x=date_tags, top=commit_amount, width=0.9)
+        p.xgrid.grid_line_color = None
+        p.y_range.start = 0
+        show(p)
 
 
     def sloc_sum(self, repo_name):
@@ -108,16 +117,15 @@ class SlocWorker:
 
 
 if __name__ == '__main__':
-
     if '--debug' in sys.argv:
-        logging.basicConfig(level=logging.INFO)
+         logging.basicConfig(level=logging.INFO)
 
     sw = SlocWorker('sqlite:///sloc.db')
-    sw.date_journey('pygount')
 
+    # # scaning process of all project by config.py
     # for info in config.info:
     #     sw.scan_sloc(repo_name=info['repo_name'],
     #         repo_path=info['repo_path'], repo_owner=info['repo_owner'],
     #         skip_path=info['skip_path'], suffix=info['suffix'])
 
-    # read_sloc_sum('sqlite:///sloc.db', repo_name='gitbook_template')
+    sw.figure_commits('pygount')
