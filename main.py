@@ -13,7 +13,7 @@ from db import Repository, Revision, Sloc
 import config
 import logging
 
-import pandas
+import pandas as pd
 
 log = logging.getLogger("sloc_main")
 
@@ -68,6 +68,7 @@ class SlocWorker:
         log.info('End of scaning.')
 
     def load_repository(self, session, repo_name):
+        log.info('load_repository: repo_name=%s', repo_name)
         repos = session.query(Repository).filter_by(name=repo_name).all()
         if len(repos) == 0:
             return None
@@ -79,12 +80,20 @@ class SlocWorker:
         s = Session()
         repo = self.load_repository(s, repo_name)
 
-        rev_group = [(r.commit_time.replace(hour=0, minute=0, second=0), r.hash, r.commit_time) for r in repo.revisions]
+        data = {
+            'hash': [ r.hash for r in repo.revisions],
+            'commit_time': [ r.commit_time for r in repo.revisions]
+        }
+
+        cm = pd.DataFrame.from_dict(data)
+        cmt = cm.set_index('commit_time').groupby(pd.Grouper(freq='D'))
+        for x in cmt:
+            log.info(x)
+
+        # rev_group = [(r.commit_time.replace(hour=0, minute=0, second=0), r.hash, r.commit_time) for r in repo.revisions]
         # journey_point = {'date': 123131231, 'sum': 1233, 'revision_count':3, 'file_count':34 }
         journey = []
-
-
-        log.info(rev_group)
+        # log.info(rev_group)
         return journey
 
 
@@ -104,7 +113,7 @@ if __name__ == '__main__':
         logging.basicConfig(level=logging.INFO)
 
     sw = SlocWorker('sqlite:///sloc.db')
-    sw.date_journey('Tarantula')
+    sw.date_journey('pygount')
 
     # for info in config.info:
     #     sw.scan_sloc(repo_name=info['repo_name'],
