@@ -13,11 +13,7 @@ from db import Repository, Revision, Sloc
 import config
 import logging
 
-import pandas as pd
-from bokeh.io import show, output_file
-from bokeh.models import ColumnDataSource, FactorRange
-from bokeh.plotting import figure
-
+from figure_worker import FigureWorker
 
 log = logging.getLogger("sloc_main")
 
@@ -25,6 +21,18 @@ class SlocWorker:
     def __init__(self, _db):
         self.db = _db
         self.engine = create_engine(self.db, echo=False)
+
+    def load_repository(self, session, repo_name):
+        log.info('load_repository: repo_name=%s', repo_name)
+        repos = session.query(Repository).filter_by(name=repo_name).all()
+        if len(repos) == 0:
+            return None
+
+        return repos[0]
+
+    def create_db_session(self):
+        Session = sessionmaker(bind=self.engine)
+        return Session()
 
     def source_scanner(self, folder, skip_path, suffix):
         files = list()
@@ -34,12 +42,11 @@ class SlocWorker:
         return files
 
     def scan_sloc(self, repo_name, repo_path, repo_owner, skip_path, suffix):
-        Session = sessionmaker(bind=self.engine)
-        s = Session()
-        row_repo = self.load_repository(s, repo_name)
+        db_session = self.create_db_engine()
+        row_repo = self.load_repository(db_session, repo_name)
         if row_repo == None:
             row_repo = Repository(name=repo_name, path=repo_path, owner=repo_owner)
-            s.add(row_repo)
+            db_session.add(row_repo)
 
         gitrepo = GitRepo(repo_path + '/.git')
         existing_revision = [ _.hash for _ in row_repo.revisions]
@@ -68,53 +75,8 @@ class SlocWorker:
                                                    filename=f, source_line=analysis.code,
                                                    empty_line=analysis.empty))
 
-        s.commit()
+        db_session.commit()
         log.info('End of scaning.')
-
-    def load_repository(self, session, repo_name):
-        log.info('load_repository: repo_name=%s', repo_name)
-        repos = session.query(Repository).filter_by(name=repo_name).all()
-        if len(repos) == 0:
-            return None
-
-        return repos[0]
-
-    def figure_commits(self, repo_name):
-        Session = sessionmaker(bind=self.engine)
-        s = Session()
-        repo = self.load_repository(s, repo_name)
-
-        data = {
-            'hash': [ r.hash for r in repo.revisions],
-            'commit_time': [ r.commit_time for r in repo.revisions]
-        }
-
-        cm = pd.DataFrame.from_dict(data)
-        cmt = cm.set_index('commit_time').groupby(pd.Grouper(freq='M'))
-
-        figure_title = "Commit Counts(%s)" % repo_name
-        output_file("figure_commits_%s.html" % repo_name)
-
-        date_tags = [str(x[0].date()) for x in cmt]
-        commit_amount = [len(x[1]) for x in cmt]
-        p = figure(x_range=date_tags, plot_height=250, title=figure_title,
-                   toolbar_location=None, tools="")
-
-        p.vbar(x=date_tags, top=commit_amount, width=0.9)
-        p.xgrid.grid_line_color = None
-        p.y_range.start = 0
-        show(p)
-
-
-    def sloc_sum(self, repo_name):
-        Session = sessionmaker(bind=self.engine)
-        s = Session()
-        repo = s.query(Repository).filter_by(name=repo_name).all()[0]
-        for r in repo.revisions:
-            for sloc in r.slocs:
-                log.info('', sloc.filename)
-
-
 
 if __name__ == '__main__':
     if '--debug' in sys.argv:
@@ -128,4 +90,5 @@ if __name__ == '__main__':
     #         repo_path=info['repo_path'], repo_owner=info['repo_owner'],
     #         skip_path=info['skip_path'], suffix=info['suffix'])
 
-    sw.figure_commits('pygount')
+    fw = FigureWorker(sw)
+    fw.figure_source_line('ape')
