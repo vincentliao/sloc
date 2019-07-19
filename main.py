@@ -12,6 +12,8 @@ from sqlalchemy.orm import sessionmaker
 from db import Repository, Revision, Sloc
 import config
 import logging
+import lexers
+from difflib import SequenceMatcher
 
 from figure_worker import FigureWorker
 
@@ -21,6 +23,7 @@ class SlocWorker:
     def __init__(self, _db):
         self.db = _db
         self.engine = create_engine(self.db, echo=False)
+        lexers.load()
 
     def load_repository(self, session, repo_name):
         log.info('load_repository: repo_name=%s', repo_name)
@@ -42,7 +45,7 @@ class SlocWorker:
         return files
 
     def scan_sloc(self, repo_name, repo_path, repo_owner, skip_path, suffix):
-        db_session = self.create_db_engine()
+        db_session = self.create_db_session()
         row_repo = self.load_repository(db_session, repo_name)
         if row_repo == None:
             row_repo = Repository(name=repo_name, path=repo_path, owner=repo_owner)
@@ -55,6 +58,7 @@ class SlocWorker:
         log.info('repo_owner: %s', row_repo.owner)
         log.info('size of existing_revision: %d', len(existing_revision))
 
+        analysis_cache = {}
         for commit in gitrepo.get_all_commit_id():
             date = datetime.datetime.fromtimestamp(int(commit.commit_time)).strftime('%Y-%m-%d %H:%M:%S')
             hash = str(commit.id)
@@ -70,12 +74,20 @@ class SlocWorker:
 
                 row_revision.slocs = []
                 for f in self.source_scanner(repo_path, skip_path, suffix):
-                    analysis = pygount.source_analysis(f, 'pygount')
+                    fcontent = open(f).read()
+                    if f in analysis_cache and analysis_cache[f][1] == fcontent:
+                        analysis = analysis_cache[f][0]
+                        # log.info('Use cache in analysis: %s', f)
+                    else:
+                        analysis = pygount.source_analysis(f, group='pygount', encoding='automatic')
+                        analysis_cache[f] = (analysis, fcontent)
+                        log.info('Analysis: %s', f)
+
                     row_revision.slocs.append(Sloc(language=analysis.language,
                                                    filename=f, source_line=analysis.code,
                                                    empty_line=analysis.empty))
+            db_session.commit()
 
-        db_session.commit()
         log.info('End of scaning.')
 
 if __name__ == '__main__':
@@ -84,11 +96,17 @@ if __name__ == '__main__':
 
     sw = SlocWorker('sqlite:///sloc.db')
 
-    # # scaning process of all project by config.py
-    # for info in config.info:
-    #     sw.scan_sloc(repo_name=info['repo_name'],
-    #         repo_path=info['repo_path'], repo_owner=info['repo_owner'],
-    #         skip_path=info['skip_path'], suffix=info['suffix'])
+    # scaning process of all project by config.py
+    if '--build' in sys.argv:
+        for info in config.info:
+             sw.scan_sloc(repo_name=info['repo_name'],
+                 repo_path=info['repo_path'], repo_owner=info['repo_owner'],
+                 skip_path=info['skip_path'], suffix=info['suffix'])
 
-    fw = FigureWorker(sw)
-    fw.figure_source_line('ape')
+    if '--figure' in sys.argv:
+
+        fi = sys.argv.index('--figure')
+        repo_name = sys.argv[fi+1]
+
+        fw = FigureWorker(sw)
+        fw.figure_source_line(repo_name)
