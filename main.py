@@ -74,7 +74,10 @@ class SlocWorker:
 
                 row_revision.slocs = []
                 for f in self.source_scanner(repo_path, skip_path, suffix):
-                    fcontent = open(f).read()
+                    fcontent = ''
+                    with open(f, 'rb') as fh:
+                        fcontent = fh.read()
+
                     if f in analysis_cache and analysis_cache[f][1] == fcontent:
                         analysis = analysis_cache[f][0]
                         # log.info('Use cache in analysis: %s', f)
