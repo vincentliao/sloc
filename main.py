@@ -26,7 +26,7 @@ class SlocWorker:
         lexers.load()
 
     def load_repository(self, session, repo_name):
-        log.info('load_repository: repo_name=%s', repo_name)
+        log.info(f'load_repository: repo_name={repo_name}')
         repos = session.query(Repository).filter_by(name=repo_name).all()
         if len(repos) == 0:
             return None
@@ -53,16 +53,16 @@ class SlocWorker:
 
         gitrepo = GitRepo(repo_path + '/.git')
         existing_revision = [ _.hash for _ in row_repo.revisions]
-        log.info('repo_name: %s', row_repo.name)
-        log.info('repo_path: %s', row_repo.path)
-        log.info('repo_owner: %s', row_repo.owner)
-        log.info('size of existing_revision: %d', len(existing_revision))
+        log.info(f'repo_name: {row_repo.name}')
+        log.info(f'repo_path: {row_repo.path}')
+        log.info(f'repo_owner: {row_repo.owner}')
+        log.info(f'size of existing_revision: {len(existing_revision)}')
 
         analysis_cache = {}
         for commit in gitrepo.get_all_commit_id():
             date = datetime.datetime.fromtimestamp(int(commit.commit_time)).strftime('%Y-%m-%d %H:%M:%S')
             hash = str(commit.id)
-            log.info('%s, %s' % (date, hash))
+            log.info(f'{date}, {hash}')
 
             if hash not in existing_revision:
                 log.info('add revision')
@@ -84,7 +84,7 @@ class SlocWorker:
                     else:
                         analysis = pygount.source_analysis(f, group='pygount', encoding='automatic')
                         analysis_cache[f] = (analysis, fcontent)
-                        log.info('Analysis: %s', f)
+                        log.info(f'Analysis: {f}')
 
                     row_revision.slocs.append(Sloc(language=analysis.language,
                                                    filename=f, source_line=analysis.code,
