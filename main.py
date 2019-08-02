@@ -9,11 +9,13 @@ import sys
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import lazyload
 from db import Repository, Revision, Sloc
 import config
 import logging
 import lexers
-from difflib import SequenceMatcher
+
+import click
 
 from figure_worker import FigureWorker
 
@@ -27,11 +29,24 @@ class SlocWorker:
 
     def load_repository(self, session, repo_name):
         log.info(f'load_repository: repo_name={repo_name}')
-        repos = session.query(Repository).filter_by(name=repo_name).all()
+        repos = session.query(Repository).options(lazyload(Repository.revisions).subqueryload(Revision.slocs)).filter_by(name=repo_name).all()
         if len(repos) == 0:
             return None
-
+        log.info(f'{repo_name} loaded.')
         return repos[0]
+
+    def load_revisions(self, repo_name):
+        session = self.create_db_session()
+        repos = session.query(Repository).options(lazyload(Repository.revisions)).filter_by(name=repo_name).all()
+        sno = repos[0].sno
+        rev_collect = session.query(Revision).options(lazyload(Revision.slocs)).filter_by(repo_sno=sno).all()
+
+        data = { 'hash': [], 'commit_time': [] }
+        for r in rev_collect:
+            data['hash'].append(r.hash)
+            data['commit_time'].append(r.commit_time)
+
+        return data
 
     def create_db_session(self):
         Session = sessionmaker(bind=self.engine)
@@ -93,23 +108,32 @@ class SlocWorker:
 
         log.info('End of scaning.')
 
-if __name__ == '__main__':
-    if '--debug' in sys.argv:
-         logging.basicConfig(level=logging.INFO)
+@click.command()
+@click.option('--debug', '-d', is_flag=True, help='Debug mode')
+@click.option('--build-all', '-ba', 'buildall', is_flag=True, help='build all')
+@click.option('--figure', '-f', 'figure', default=1, help='draw a figure for the repo')
+@click.argument('repo_name')
+def sloc(debug, buildall, figure, repo_name):
+
+    if debug:
+        logging.basicConfig(level=logging.DEBUG)
 
     sw = SlocWorker('sqlite:///sloc.db')
 
-    # scaning process of all project by config.py
-    if '--build' in sys.argv:
+    if buildall:
         for info in config.info:
              sw.scan_sloc(repo_name=info['repo_name'],
                  repo_path=info['repo_path'], repo_owner=info['repo_owner'],
                  skip_path=info['skip_path'], suffix=info['suffix'])
 
-    if '--figure' in sys.argv:
-
-        fi = sys.argv.index('--figure')
-        repo_name = sys.argv[fi+1]
-
+    if figure == 0:
         fw = FigureWorker(sw)
         fw.figure_source_line(repo_name)
+    elif figure ==1:
+        fw = FigureWorker(sw)
+        fw.figure_commits(repo_name)
+
+
+
+if __name__ == '__main__':
+    sloc()

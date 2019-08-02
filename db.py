@@ -14,7 +14,7 @@ class Repository(Base):
     name = Column(String(256))
     path = Column(String(256))
     owner = Column(String(100))
-    revisions = relationship('Revision', backref='repository')
+    revisions = relationship('Revision', backref='repository', lazy='joined')
 
 class Revision(Base):
     __tablename__ = 'revision'
@@ -23,7 +23,7 @@ class Revision(Base):
     commit_time = Column(DateTime)
     repo_sno = Column(Integer, ForeignKey('repository.sno'))
     repo = relationship('Repository', back_populates='revisions')
-    slocs = relationship('Sloc')
+    slocs = relationship('Sloc', lazy='joined')
 
 class Sloc(Base):
     __tablename__ = 'sloc'
