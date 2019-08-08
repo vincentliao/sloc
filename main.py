@@ -10,14 +10,14 @@ import sys
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import lazyload
-from db import Repository, Revision, Sloc
+from db import Repository, Revision, Sloc, build_db
 import config
 import logging
 import lexers
-
 import click
-
 from figure_worker import FigureWorker
+from functools import reduce
+
 
 log = logging.getLogger("sloc_main")
 
@@ -67,11 +67,13 @@ class SlocWorker:
             db_session.add(row_repo)
 
         gitrepo = GitRepo(repo_path + '/.git')
-        existing_revision = [ _.hash for _ in row_repo.revisions]
+        existing_revision = [ _.hash for _ in row_repo.revisions ]
         log.info(f'repo_name: {row_repo.name}')
         log.info(f'repo_path: {row_repo.path}')
         log.info(f'repo_owner: {row_repo.owner}')
         log.info(f'size of existing_revision: {len(existing_revision)}')
+
+        pygount.analysis._log.setLevel(logging.ERROR)
 
         analysis_cache = {}
         for commit in gitrepo.get_all_commit_id():
@@ -83,7 +85,7 @@ class SlocWorker:
                 log.info('add revision')
                 existing_revision.append(hash)
                 row_revision = Revision(hash=hash,
-                                        commit_time=datetime.datetime.fromtimestamp(int(commit.commit_time)))
+                                       commit_time=datetime.datetime.fromtimestamp(int(commit.commit_time)))
                 row_repo.revisions.append(row_revision)
                 gitrepo.checkout_by(hash)
 
@@ -95,15 +97,15 @@ class SlocWorker:
 
                     if f in analysis_cache and analysis_cache[f][1] == fcontent:
                         analysis = analysis_cache[f][0]
-                        # log.info('Use cache in analysis: %s', f)
+                        log.info('Use cache in analysis: %s', f)
                     else:
                         analysis = pygount.source_analysis(f, group='pygount', encoding='automatic')
                         analysis_cache[f] = (analysis, fcontent)
                         log.info(f'Analysis: {f}')
 
                     row_revision.slocs.append(Sloc(language=analysis.language,
-                                                   filename=f, source_line=analysis.code,
-                                                   empty_line=analysis.empty))
+                                                  filename=f, source_line=analysis.code,
+                                                  empty_line=analysis.empty))
             db_session.commit()
 
         log.info('End of scaning.')
@@ -117,6 +119,9 @@ def sloc(debug, buildall, figure, repo_name):
 
     if debug:
         logging.basicConfig(level=logging.DEBUG)
+
+    if not os.path.isfile('sloc.db'):
+        build_db()
 
     sw = SlocWorker('sqlite:///sloc.db')
 
