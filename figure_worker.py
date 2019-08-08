@@ -60,6 +60,7 @@ class FigureWorker:
             sloc_info.append(last_total_lines)
             log.info('%s: %s sloc=%d', date, last_hash, last_total_lines)
 
-        p = figure(x_range=sloc_date, plot_height=400, plot_width=600, title=figure_title)
+        p = figure(x_range=sloc_date, title=figure_title)
         p.line(sloc_date, sloc_info, line_width=2)
+        p.sizing_mode = 'scale_width'
         show(p)
